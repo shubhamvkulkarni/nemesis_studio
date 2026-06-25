@@ -1,5 +1,7 @@
+import os
 import panel as pn
 import requests
+import webview
 
 # Enable Panel extensions
 pn.extension()
@@ -116,4 +118,14 @@ template = pn.template.FastListTemplate(
 )
 
 # Serve the application layout
-template.servable()
+template.show(port=5006, threaded=True, open=False)
+
+# Define the local URL string pointing to that port
+url = "http://localhost:5006"
+
+def on_closed():
+    os._exit(0)
+
+window = webview.create_window('NEMESIS Studio', url, width=1200, height=800)
+window.events.closed += on_closed
+webview.start()
