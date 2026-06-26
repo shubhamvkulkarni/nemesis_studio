@@ -1,0 +1,6 @@
+           1  ! Total number of retrievals
+           1    ! ispec
+   0.00000000       0.00000000      ! Latitude, Longitude
+          39           0   ! npro,nvar
+           0   ! nx
+

@@ -3,6 +3,11 @@ import numpy as np
 import pandas as pd
 import hvplot.pandas
 import holoviews as hv
+import sys
+
+# Add ref folder to path to import lib_nemesis_py
+sys.path.append(os.path.join(os.path.dirname(__file__), 'ref'))
+import lib_nemesis_py
 
 def read_ref_file(filepath):
     with open(filepath, 'r') as f:
@@ -35,23 +40,34 @@ def read_ref_file(filepath):
 
 def read_aerosol_file(filepath):
     with open(filepath, 'r') as f:
-        aero_info = f.readlines()
+        lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
         
-    temp = np.fromstring(aero_info[0], dtype=int, sep=' ')
-    ngeo = temp[0]
-    nmode = temp[1]
+    if not lines:
+        raise ValueError("Aerosol file is empty or contains only comments.")
+        
+    header = lines[0].split()
+    ngeo = int(header[0])
+    nmode = int(header[1])
     
-    aero_grid = np.zeros((ngeo, nmode + 1))
+    flat_data = []
+    for line in lines[1:]:
+        for token in line.split():
+            try:
+                flat_data.append(float(token))
+            except ValueError:
+                pass
+                
+    flat_data = np.array(flat_data)
+    expected_len = ngeo * (nmode + 1)
+    if len(flat_data) < expected_len:
+        padded = np.zeros(expected_len)
+        padded[:len(flat_data)] = flat_data
+        flat_data = padded
+    elif len(flat_data) > expected_len:
+        flat_data = flat_data[:expected_len]
+        
+    aero_grid = flat_data.reshape((ngeo, nmode + 1))
     
-    if nmode < 5:
-        for level in range(ngeo):
-            aero_grid[level, :] = np.fromstring(aero_info[1 + level], dtype=float, sep=' ')
-    else:
-        for level in range(ngeo):
-            line_no = 1 + level * 2
-            aero_grid[level, :5] = np.fromstring(aero_info[line_no], dtype=float, sep=' ')
-            aero_grid[level, 5:] = np.fromstring(aero_info[1 + line_no], dtype=float, sep=' ')
-            
     columns = ['Height (km)'] + [f'Mode {i+1}' for i in range(nmode)]
     df = pd.DataFrame(aero_grid, columns=columns)
     return df
@@ -134,7 +150,46 @@ def get_aerosols_plot(aero_filepath):
         p.ygrid.minor_grid_line_color = 'lightgray'
         p.ygrid.minor_grid_line_alpha = 0.5
         
-    p = df_melted.hvplot.line(x='Density', y='Height (km)', by='Mode', 
+    p = df_melted.hvplot.line(x='Density', y='Height (km)', by='Mode', logx=True,
                               title='Aerosol Profiles', width=1200, height=500,
                               xlabel='Aerosol Density', ylabel='Altitude (km)').opts(show_grid=True, hooks=[grid_hook])
     return p
+
+def get_spectrum_plot(runname_path):
+    if not os.path.exists(runname_path + '.mre'):
+        return hv.Div(f"File not found: {runname_path}.mre")
+        
+    try:
+        # read_ref returns: IPLANET, LATTITUDE, NP, NVMR, MOLWT, atm_profile
+        IPLANET, LATTITUDE, NP, NVMR, MOLWT, atm_profile = lib_nemesis_py.read_ref(runname_path)
+        
+        # read_mre returns: iretrv, ispec, NGEOM, ny, nx, ny1, LATITUDE, LONGITUDE, height_lay, NWAVE, specs, NVAR
+        res = lib_nemesis_py.read_mre(runname_path, IPLANET, LATTITUDE, NP, NVMR, MOLWT, atm_profile, if_var='no')
+        NGEOM = res[2]
+        specs = res[10]
+        
+        plots = []
+        for g in range(NGEOM):
+            # specs[:, :, 1] is lambda (Wavenumber), specs[:, :, 5] is R_fit (Simulated Radiance)
+            df = pd.DataFrame({
+                'WAVENUMBER': specs[g, :, 1],
+                'SIMULATED_RADIANCE': specs[g, :, 5]
+            })
+            p = df.hvplot.line(x='WAVENUMBER', y='SIMULATED_RADIANCE', 
+                               label=f'Geom {g+1}' if NGEOM > 1 else 'Simulated Spectra')
+            plots.append(p)
+            
+        if len(plots) > 1:
+            plot = hv.Overlay(plots)
+        else:
+            plot = plots[0]
+            
+        return plot.opts(
+            title='Simulated Spectra (Radiative Transfer)', 
+            width=1200, height=500, 
+            show_grid=True,
+            xlabel='WAVENUMBER',
+            ylabel='SIMULATED_RADIANCE'
+        )
+    except Exception as e:
+        return hv.Div(f"Error reading .mre file: {str(e)}")
