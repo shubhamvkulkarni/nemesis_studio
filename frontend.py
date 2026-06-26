@@ -2,9 +2,10 @@ import os
 import panel as pn
 import requests
 import webview
+import f_plots
 
 # Enable Panel extensions
-pn.extension()
+pn.extension('holoviews')
 
 # Server API Endpoint (for future integration)
 BACKEND_URL = "http://127.0.0.1:8000"
@@ -22,44 +23,59 @@ nav_menu = pn.widgets.RadioButtonGroup(
 # --- Outreach Pane (Default Page) ---
 outreach_markdown = pn.pane.Markdown(
     """
-    ## Welcome to NEMESIS Studio
-    
-    NEMESIS Studio provides a Graphical User Interface (GUI) for the original **NEMESIS** (Non-linear optimal Estimator for MultivariatE spectral AnalySIS) radiative transfer and retrieval code.
-    
-    For more details on the underlying model and code, check the [NEMESIS GitHub Repository](https://github.com/nemesiscode/radtrancode).
-    
-    *This is the Outreach pane/page.*
+    GUI for the **NEMESIS** radiative transfer and retrieval code. 
+    [GitHub Repository](https://github.com/nemesiscode/radtrancode).
     """,
     styles={'font-family': 'sans-serif'}
 )
 
-# Planet Selection Dialog Box
-planet_select = pn.widgets.Select(
-    name="Choose from the list of planets",
+# Planet Selection
+planet_select = pn.widgets.RadioButtonGroup(
+    name="Planet",
     options=["Jupiter", "Venus"],
     value="Jupiter",
-    width=250
+    button_type="success"
 )
 
-planet_status = pn.pane.Markdown("Selected Planet: **Jupiter**")
-
-def on_planet_change(event):
-    planet_status.object = f"Selected Planet: **{event.new}**"
-
-planet_select.param.watch(on_planet_change, 'value')
-
-planet_dialog_card = pn.Card(
-    planet_select,
-    planet_status,
-    title="Choose from the list of planets",
-    width=320,
-    collapsible=False
+model_button = pn.widgets.Button(name="Plot", button_type="primary", width=100)
+plot_options = pn.widgets.RadioButtonGroup(
+    name="Plot Options",
+    options=["Pressure and Temp", "Gases", "Aerosols"],
+    value="Pressure and Temp",
+    button_type="success"
 )
+
+plot_pane = pn.pane.HoloViews()
+plot_error = pn.pane.Markdown("")
+
+def generate_model_plots(event):
+    planet = planet_select.value.lower()
+    base_path = os.path.join(os.getcwd(), "outreach", planet, f"{planet}_main")
+    ref_path = os.path.join(base_path, f"{planet}.ref")
+    aerosol_path = os.path.join(base_path, "aerosol.ref")
+    
+    selected_plot = plot_options.value
+    try:
+        plot_error.object = ""
+        if selected_plot == "Pressure and Temp":
+            plot_pane.object = f_plots.get_pressure_temp_plot(ref_path)
+        elif selected_plot == "Gases":
+            plot_pane.object = f_plots.get_gases_plot(ref_path)
+        elif selected_plot == "Aerosols":
+            plot_pane.object = f_plots.get_aerosols_plot(aerosol_path)
+    except Exception as e:
+        plot_error.object = f"**Error generating plot:** {str(e)}"
+        plot_pane.object = None
+
+model_button.on_click(generate_model_plots)
 
 outreach_layout = pn.Column(
     outreach_markdown,
-    pn.Spacer(height=15),
-    planet_dialog_card,
+    pn.Row(pn.pane.Markdown("**Select the planet:**", margin=(10, 10, 0, 0)), planet_select),
+    pn.layout.Divider(margin=(5, 0)),
+    pn.Row(pn.pane.Markdown("**Atmospheric model:**", margin=(10, 10, 0, 0)), plot_options, model_button),
+    plot_error,
+    plot_pane,
     margin=10
 )
 
