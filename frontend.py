@@ -1,3 +1,4 @@
+import sys
 import os
 import time
 import threading
@@ -275,6 +276,8 @@ url = "http://localhost:5006"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 splash_html_path = os.path.join(ROOT_DIR, 'assets', 'splash.html')
 
+show_splash = '--show-splash' in sys.argv
+
 def poll_server_and_load():
     global window
     start_time = time.time()
@@ -289,21 +292,24 @@ def poll_server_and_load():
             pass
         time.sleep(0.5)
         
-    elapsed = time.time() - start_time
-    wait_time = 10.5  # Ensure splash screen displays for ~10.5 seconds
-    if elapsed < wait_time:
-        time.sleep(wait_time - elapsed)
+    if show_splash:
+        elapsed = time.time() - start_time
+        wait_time = 10.5  # Ensure splash screen displays for ~10.5 seconds
+        if elapsed < wait_time:
+            time.sleep(wait_time - elapsed)
+            
+        # Smooth fade out
+        splash_window.evaluate_js('document.body.style.transition = "opacity 1s ease-in-out"; document.body.style.opacity = "0";')
+        time.sleep(1)
         
-    # Smooth fade out
-    splash_window.evaluate_js('document.body.style.transition = "opacity 1s ease-in-out"; document.body.style.opacity = "0";')
-    time.sleep(1)
-    
-    # Create the main window
-    window = webview.create_window('NEMESIS Studio', url=url, width=1200, height=800)
-    window.events.closed += on_closed
-    
-    # Close the splash window
-    splash_window.destroy()
+        # Create the main window
+        window = webview.create_window('NEMESIS Studio', url=url, width=1200, height=800)
+        window.events.closed += on_closed
+        
+        # Close the splash window
+        splash_window.destroy()
+    else:
+        window.load_url(url)
 
 def on_closed():
     os._exit(0)
@@ -311,8 +317,13 @@ def on_closed():
 # Global variable for the main window
 window = None
 
-# Initialize pywebview frameless window for the splash screen
-splash_window = webview.create_window('NEMESIS Studio Splash', url=splash_html_path, width=640, height=360, frameless=True)
+if show_splash:
+    # Initialize pywebview frameless window for the splash screen
+    splash_window = webview.create_window('NEMESIS Studio Splash', url=splash_html_path, width=640, height=360, frameless=True)
+else:
+    # Initialize main window directly
+    window = webview.create_window('NEMESIS Studio', url='data:text/html,<html><body style="background-color: #1a252f; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif;"><h2>Loading NEMESIS Studio...</h2></body></html>', width=1200, height=800)
+    window.events.closed += on_closed
 
 # Start the background thread
 threading.Thread(target=poll_server_and_load, daemon=True).start()
