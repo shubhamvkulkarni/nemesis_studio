@@ -21,4 +21,4 @@
   
  iprfcheck,icheck =            0           0
  Model run OK
- Elapsed time (s) =     23.1
+ Elapsed time (s) =     25.6

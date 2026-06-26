@@ -1,4 +1,6 @@
 import os
+import time
+import threading
 import panel as pn
 import requests
 import webview
@@ -270,9 +272,38 @@ template.show(port=5006, threaded=True, open=False)
 # Define the local URL string pointing to that port
 url = "http://localhost:5006"
 
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+splash_html_path = os.path.join(ROOT_DIR, 'assets', 'splash.html')
+
+def poll_server_and_load():
+    start_time = time.time()
+    
+    # Poll for 200 OK status
+    while True:
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                break
+        except requests.exceptions.ConnectionError:
+            pass
+        time.sleep(0.5)
+        
+    elapsed = time.time() - start_time
+    wait_time = 10.5  # Ensure splash screen displays for ~10.5 seconds
+    if elapsed < wait_time:
+        time.sleep(wait_time - elapsed)
+        
+    # Replace splash screen with live Panel GUI
+    window.load_url(url)
+
 def on_closed():
     os._exit(0)
 
-window = webview.create_window('NEMESIS Studio', url, width=1200, height=800)
+# Initialize pywebview window with local HTML file (pywebview will host it)
+window = webview.create_window('NEMESIS Studio', url=splash_html_path, width=1200, height=800)
 window.events.closed += on_closed
+
+# Start the background thread
+threading.Thread(target=poll_server_and_load, daemon=True).start()
+
 webview.start()
