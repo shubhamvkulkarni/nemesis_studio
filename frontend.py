@@ -264,7 +264,8 @@ template = pn.template.FastListTemplate(
         render_active_pane
     ],
     accent_base_color="#2c3e50",
-    header_background="#1a252f"
+    header_background="#1a252f",
+    sidebar_width=150
 )
 
 # Serve the application layout
