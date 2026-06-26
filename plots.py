@@ -3,74 +3,9 @@ import numpy as np
 import pandas as pd
 import hvplot.pandas
 import holoviews as hv
-import sys
 
-# Add ref folder to path to import lib_nemesis_py
-sys.path.append(os.path.join(os.path.dirname(__file__), 'ref'))
-import lib_nemesis_py
-
-def read_ref_file(filepath):
-    with open(filepath, 'r') as f:
-        atm_ref = f.readlines()
-        
-    line_no = 0
-    for i in range(len(atm_ref)):
-        if not atm_ref[i].strip().startswith('#'):
-            line_no = i
-            break
-            
-    # skip AMFORM1 and AMFORM2
-    NP_line = atm_ref[2 + line_no]
-    vals = NP_line.split()
-    IPLANET = float(vals[0])
-    LATTITUDE = float(vals[1])
-    NP = int(float(vals[2]))
-    NVMR = int(float(vals[3]))
-    MOLWT = float(vals[4])
-    
-    atm_profile = np.zeros((NP, NVMR + 3))
-    for pres_level in range(NP):
-        line = atm_ref[pres_level + 4 + NVMR + line_no]
-        atm_profile[pres_level, :] = np.fromstring(line, dtype=float, sep=' ')
-        
-    # Create DataFrame
-    columns = ['Height (km)', 'Pressure (atm)', 'Temp (K)'] + [f'Gas {i+1}' for i in range(NVMR)]
-    df = pd.DataFrame(atm_profile, columns=columns)
-    return df
-
-def read_aerosol_file(filepath):
-    with open(filepath, 'r') as f:
-        lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
-        
-    if not lines:
-        raise ValueError("Aerosol file is empty or contains only comments.")
-        
-    header = lines[0].split()
-    ngeo = int(header[0])
-    nmode = int(header[1])
-    
-    flat_data = []
-    for line in lines[1:]:
-        for token in line.split():
-            try:
-                flat_data.append(float(token))
-            except ValueError:
-                pass
-                
-    flat_data = np.array(flat_data)
-    expected_len = ngeo * (nmode + 1)
-    if len(flat_data) < expected_len:
-        padded = np.zeros(expected_len)
-        padded[:len(flat_data)] = flat_data
-        flat_data = padded
-    elif len(flat_data) > expected_len:
-        flat_data = flat_data[:expected_len]
-        
-    aero_grid = flat_data.reshape((ngeo, nmode + 1))
-    
-    columns = ['Height (km)'] + [f'Mode {i+1}' for i in range(nmode)]
-    df = pd.DataFrame(aero_grid, columns=columns)
-    return df
+# Import reading functions
+from data_read import read_ref_file, read_aerosol_file, read_spx_file, read_inp_file, read_mre_file
 
 def get_pressure_temp_plot(ref_filepath):
     if not os.path.exists(ref_filepath):
@@ -160,22 +95,54 @@ def get_spectrum_plot(runname_path):
         return hv.Div(f"File not found: {runname_path}.mre")
         
     try:
-        # read_ref returns: IPLANET, LATTITUDE, NP, NVMR, MOLWT, atm_profile
-        IPLANET, LATTITUDE, NP, NVMR, MOLWT, atm_profile = lib_nemesis_py.read_ref(runname_path)
+        mre_data = read_mre_file(runname_path + '.mre')
+        NGEOM = mre_data['NGEOM']
+        specs = mre_data['specs']
         
-        # read_mre returns: iretrv, ispec, NGEOM, ny, nx, ny1, LATITUDE, LONGITUDE, height_lay, NWAVE, specs, NVAR
-        res = lib_nemesis_py.read_mre(runname_path, IPLANET, LATTITUDE, NP, NVMR, MOLWT, atm_profile, if_var='no')
-        NGEOM = res[2]
-        specs = res[10]
-        
+        spx_filepath = runname_path + '.spx'
+        if os.path.exists(spx_filepath):
+            spx_data = read_spx_file(spx_filepath)
+        else:
+            spx_data = None
+            
+        inp_filepath = runname_path + '.inp'
+        if os.path.exists(inp_filepath):
+            inp_data = read_inp_file(inp_filepath)
+            ispace = inp_data.get('ISPACE', 0)
+            iform = inp_data.get('IFORM', 0)
+            
+            x_label = 'Wavelength (μm)' if ispace == 1 else 'Wavenumber (cm⁻¹)'
+            
+            if iform == 0:
+                y_label = 'Radiance (μW cm⁻² sr⁻¹ μm⁻¹)' if ispace == 1 else 'Radiance (nW cm⁻² sr⁻¹ (cm⁻¹)⁻¹)'
+            elif iform == 1:
+                y_label = 'Fplan/Fstar (dimensionless)'
+            elif iform == 2:
+                y_label = '100*Aplan/Astar (dimensionless)'
+            elif iform == 3:
+                y_label = 'Flux (W μm⁻¹)' if ispace == 1 else 'Flux (W (cm⁻¹)⁻¹)'
+            elif iform == 4:
+                y_label = 'Flux Density (W cm⁻² μm⁻¹)' if ispace == 1 else 'Flux Density (W cm⁻² (cm⁻¹)⁻¹)'
+            else:
+                y_label = 'Radiance'
+        else:
+            x_label = 'WAVENUMBER'
+            y_label = 'SIMULATED_RADIANCE'
+            
         plots = []
         for g in range(NGEOM):
-            # specs[:, :, 1] is lambda (Wavenumber), specs[:, :, 5] is R_fit (Simulated Radiance)
+            if spx_data and g < len(spx_data):
+                vconv = spx_data[g]['vconv']
+            else:
+                vconv = specs[g, :, 1]
+                
+            # specs[:, :, 5] is R_fit (Simulated Radiance)
+            radiance = specs[g, :, 5][:len(vconv)]
             df = pd.DataFrame({
-                'WAVENUMBER': specs[g, :, 1],
-                'SIMULATED_RADIANCE': specs[g, :, 5]
+                x_label: vconv,
+                y_label: radiance
             })
-            p = df.hvplot.line(x='WAVENUMBER', y='SIMULATED_RADIANCE', 
+            p = df.hvplot.line(x=x_label, y=y_label, 
                                label=f'Geom {g+1}' if NGEOM > 1 else 'Simulated Spectra')
             plots.append(p)
             
@@ -188,8 +155,8 @@ def get_spectrum_plot(runname_path):
             title='Simulated Spectra (Radiative Transfer)', 
             width=1200, height=500, 
             show_grid=True,
-            xlabel='WAVENUMBER',
-            ylabel='SIMULATED_RADIANCE'
+            xlabel=x_label,
+            ylabel=y_label
         )
     except Exception as e:
         return hv.Div(f"Error reading .mre file: {str(e)}")

@@ -5,7 +5,7 @@ import threading
 import panel as pn
 import requests
 import webview
-import f_plots
+import plots
 import subprocess
 
 # Enable Panel extensions
@@ -62,11 +62,11 @@ def make_model_plot(clicks):
     selected_plot = plot_options.value
     try:
         if selected_plot == "Pressure and Temp":
-            return f_plots.get_pressure_temp_plot(ref_path)
+            return plots.get_pressure_temp_plot(ref_path)
         elif selected_plot == "Gases":
-            return f_plots.get_gases_plot(ref_path)
+            return plots.get_gases_plot(ref_path)
         elif selected_plot == "Aerosols":
-            return f_plots.get_aerosols_plot(aerosol_path)
+            return plots.get_aerosols_plot(aerosol_path)
     except Exception as e:
         return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", style={'color': 'red'})
 
@@ -92,7 +92,7 @@ def make_radiance_plot(clicks):
             subprocess.run(cmd, shell=True, executable='/bin/zsh', cwd=base_path, check=True)
             print(f"--- NEMESIS simulation completed ---")
             
-        return f_plots.get_spectrum_plot(runname_path)
+        return plots.get_spectrum_plot(runname_path)
     except subprocess.CalledProcessError as e:
         return pn.pane.Markdown(f"**Error running Nemesis simulation:** Process exited with code {e.returncode}.", style={'color': 'red'})
     except Exception as e:
@@ -151,11 +151,11 @@ def make_beginner_model_plot(clicks):
     selected_plot = beginner_plot_options.value
     try:
         if selected_plot == "Pressure and Temp":
-            return f_plots.get_pressure_temp_plot(ref_path)
+            return plots.get_pressure_temp_plot(ref_path)
         elif selected_plot == "Gases":
-            return f_plots.get_gases_plot(ref_path)
+            return plots.get_gases_plot(ref_path)
         elif selected_plot == "Aerosols":
-            return f_plots.get_aerosols_plot(aerosol_path)
+            return plots.get_aerosols_plot(aerosol_path)
     except Exception as e:
         return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", style={'color': 'red'})
 
@@ -183,7 +183,7 @@ def make_beginner_radiance_plot(clicks):
             subprocess.run(cmd, shell=True, executable='/bin/zsh', cwd=base_path, check=True)
             print(f"--- NEMESIS simulation completed ---")
             
-        return f_plots.get_spectrum_plot(runname_path)
+        return plots.get_spectrum_plot(runname_path)
     except subprocess.CalledProcessError as e:
         return pn.pane.Markdown(f"**Error running Nemesis simulation:** Process exited with code {e.returncode}.", style={'color': 'red'})
     except Exception as e:
