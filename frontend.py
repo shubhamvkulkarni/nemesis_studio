@@ -276,6 +276,7 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 splash_html_path = os.path.join(ROOT_DIR, 'assets', 'splash.html')
 
 def poll_server_and_load():
+    global window
     start_time = time.time()
     
     # Poll for 200 OK status
@@ -293,15 +294,25 @@ def poll_server_and_load():
     if elapsed < wait_time:
         time.sleep(wait_time - elapsed)
         
-    # Replace splash screen with live Panel GUI
-    window.load_url(url)
+    # Smooth fade out
+    splash_window.evaluate_js('document.body.style.transition = "opacity 1s ease-in-out"; document.body.style.opacity = "0";')
+    time.sleep(1)
+    
+    # Create the main window
+    window = webview.create_window('NEMESIS Studio', url=url, width=1200, height=800)
+    window.events.closed += on_closed
+    
+    # Close the splash window
+    splash_window.destroy()
 
 def on_closed():
     os._exit(0)
 
-# Initialize pywebview window with local HTML file (pywebview will host it)
-window = webview.create_window('NEMESIS Studio', url=splash_html_path, width=1200, height=800)
-window.events.closed += on_closed
+# Global variable for the main window
+window = None
+
+# Initialize pywebview frameless window for the splash screen
+splash_window = webview.create_window('NEMESIS Studio Splash', url=splash_html_path, width=640, height=360, frameless=True)
 
 # Start the background thread
 threading.Thread(target=poll_server_and_load, daemon=True).start()

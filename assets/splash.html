@@ -1,44 +1,64 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<style>
-  body, html {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background-color: black;
-  }
-  video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    pointer-events: none; /* Disable all interactions */
-  }
-  
-  /* Hide all WebKit media controls completely */
-  video::-webkit-media-controls { display: none !important; }
-  video::-webkit-media-controls-enclosure { display: none !important; }
-  video::-webkit-media-controls-panel { display: none !important; }
-  video::-webkit-media-controls-play-button { display: none !important; }
-  video::-webkit-media-controls-start-playback-button { display: none !important; }
-</style>
+  <style>
+    body,
+    html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: black;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      /* Disable all interactions */
+    }
+
+    /* Hide all WebKit media controls completely */
+    video::-webkit-media-controls {
+      display: none !important;
+    }
+
+    video::-webkit-media-controls-enclosure {
+      display: none !important;
+    }
+
+    video::-webkit-media-controls-panel {
+      display: none !important;
+    }
+
+    video::-webkit-media-controls-play-button {
+      display: none !important;
+    }
+
+    video::-webkit-media-controls-start-playback-button {
+      display: none !important;
+    }
+  </style>
 </head>
+
 <body>
   <video id="splash-video" autoplay playsinline>
     <source src="splash_1.mp4" type="video/mp4">
   </video>
   <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
       var video = document.getElementById("splash-video");
       var playPromise = video.play();
       if (playPromise !== undefined) {
-        playPromise.catch(function(error) {
+        playPromise.catch(function (error) {
           console.log("Autoplay blocked, attempting to play again:", error);
         });
       }
     });
   </script>
 </body>
+
 </html>
