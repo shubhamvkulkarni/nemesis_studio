@@ -22,30 +22,20 @@
     }
 
     /* Hide all WebKit media controls completely */
-    video::-webkit-media-controls {
+    video::-webkit-media-controls,
+    video::-webkit-media-controls-enclosure,
+    video::-webkit-media-controls-panel,
+    video::-webkit-media-controls-play-button,
+    video::-webkit-media-controls-start-playback-button,
+    video::-webkit-media-controls-overlay-play-button {
       display: none !important;
-    }
-
-    video::-webkit-media-controls-enclosure {
-      display: none !important;
-    }
-
-    video::-webkit-media-controls-panel {
-      display: none !important;
-    }
-
-    video::-webkit-media-controls-play-button {
-      display: none !important;
-    }
-
-    video::-webkit-media-controls-start-playback-button {
-      display: none !important;
+      -webkit-appearance: none !important;
     }
   </style>
 </head>
 
 <body>
-  <video id="splash-video" autoplay playsinline>
+  <video id="splash-video" autoplay muted playsinline>
     <source src="splash_1.mp4" type="video/mp4">
   </video>
   <script>

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 # Activate the conda environment
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate nemesis_studio

@@ -9,7 +9,7 @@ import plots
 import subprocess
 
 # Enable Panel extensions
-pn.extension('holoviews')
+pn.extension()
 
 # Server API Endpoint (for future integration)
 BACKEND_URL = "http://127.0.0.1:8000"
