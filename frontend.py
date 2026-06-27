@@ -27,8 +27,9 @@ nav_menu = pn.widgets.RadioButtonGroup(
 # --- Outreach Pane (Default Page) ---
 outreach_markdown = pn.pane.Markdown(
     """
-    GUI for the **NEMESIS** radiative transfer and retrieval code. 
-    [GitHub Repository](https://github.com/nemesiscode/radtrancode).
+    A visual showcase of planetary spectra and atmospheric models, powered by
+    [NEMESIS](https://github.com/nemesiscode/radtrancode),
+    the radiative transfer and retrieval code.
     """,
     styles={'font-family': 'sans-serif'}
 )
@@ -430,11 +431,7 @@ general_tabs = pn.Tabs(
 
 general_layout = pn.Column(
     pn.pane.Markdown(
-        """
-        ## General Workspace
-        
-        *This is the General pane/page.*
-        
+        """    
         This workspace will guide you through running standard simulations step-by-step.
         """
     ),

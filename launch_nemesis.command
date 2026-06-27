@@ -1,9 +1,6 @@
 #!/bin/bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Launch Backend
-osascript -e "tell application \"Terminal\" to do script \"cd '$DIR' && ./backend.sh\""
-
 # Launch Frontend
 osascript -e "tell application \"Terminal\" to do script \"cd '$DIR' && ./frontend.sh\""
 
