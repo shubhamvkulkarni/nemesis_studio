@@ -38,7 +38,8 @@ planet_select = pn.widgets.RadioButtonGroup(
     name="Planet",
     options=["Jupiter", "Venus"],
     value="Jupiter",
-    button_type="success"
+    button_type="primary",
+    button_style="outline"
 )
 
 model_button = pn.widgets.Button(name="Plot", button_type="primary", width=100)
@@ -46,7 +47,8 @@ plot_options = pn.widgets.RadioButtonGroup(
     name="Plot Options",
     options=["Pressure and Temp", "Gases", "Aerosols"],
     value="Pressure and Temp",
-    button_type="success"
+    button_type="success",
+    button_style="outline"
 )
 
 def make_model_plot(clicks):
@@ -346,7 +348,8 @@ beginner_plot_options = pn.widgets.RadioButtonGroup(
     name="Plot Options",
     options=["Pressure and Temp", "Gases", "Aerosols"],
     value="Pressure and Temp",
-    button_type="success"
+    button_type="success",
+    button_style="outline"
 )
 
 def make_beginner_model_plot(clicks):
