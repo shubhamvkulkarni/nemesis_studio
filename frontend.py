@@ -68,7 +68,7 @@ def make_model_plot(clicks):
         elif selected_plot == "Aerosols":
             return plots.get_aerosols_plot(aerosol_path)
     except Exception as e:
-        return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", style={'color': 'red'})
+        return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", styles={'color': 'red'})
 
 model_plot_pane = pn.panel(pn.bind(make_model_plot, model_button.param.clicks))
 
@@ -94,11 +94,207 @@ def make_radiance_plot(clicks):
             
         return plots.get_spectrum_plot(runname_path)
     except subprocess.CalledProcessError as e:
-        return pn.pane.Markdown(f"**Error running Nemesis simulation:** Process exited with code {e.returncode}.", style={'color': 'red'})
+        return pn.pane.Markdown(f"**Error running Nemesis simulation:** Process exited with code {e.returncode}.", styles={'color': 'red'})
     except Exception as e:
-        return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", style={'color': 'red'})
+        return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", styles={'color': 'red'})
 
 radiance_plot_pane = pn.panel(pn.bind(make_radiance_plot, radiance_button.param.clicks))
+
+# --- Variability Section ---
+var_type_select = pn.widgets.Select(name="Variability", options=["Temperature", "Gases", "Aerosols"], value="Temperature")
+var_name_select = pn.widgets.Select(name="Parameter Name", options=[])
+var_name_select.visible = False
+var_percent_input = pn.widgets.FloatInput(name="% Variation", value=10.0, step=1.0)
+var_calc_button = pn.widgets.Button(name="Calculate", button_type="primary", width=100)
+
+@pn.depends(var_type_select.param.value, planet_select.param.value, watch=True)
+def update_var_name_select(var_type, planet):
+    planet = planet.lower()
+    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+    base_path = os.path.join(ROOT_DIR, "outreach", planet, f"{planet}_main")
+    
+    if var_type == "Temperature":
+        var_name_select.visible = False
+        var_name_select.options = []
+    elif var_type == "Gases":
+        var_name_select.visible = True
+        ref_path = os.path.join(base_path, f"{planet}.ref")
+        if os.path.exists(ref_path):
+            import data_read
+            df = data_read.read_ref_file(ref_path)
+            gas_cols = [col for col in df.columns if col not in ['Height (km)', 'Pressure (atm)', 'Temp (K)']]
+            var_name_select.options = gas_cols
+            if gas_cols:
+                var_name_select.value = gas_cols[0]
+        else:
+            var_name_select.options = []
+    elif var_type == "Aerosols":
+        var_name_select.visible = True
+        aerosol_path = os.path.join(base_path, "aerosol.ref")
+        if os.path.exists(aerosol_path):
+            import data_read
+            df = data_read.read_aerosol_file(aerosol_path)
+            mode_cols = [col for col in df.columns if col.startswith('Mode')]
+            var_name_select.options = mode_cols
+            if mode_cols:
+                var_name_select.value = mode_cols[0]
+        else:
+            var_name_select.options = []
+
+def calculate_variability(clicks):
+    if clicks == 0:
+        return pn.pane.Markdown("*Select parameters and click Calculate to view variability*")
+        
+    planet = planet_select.value.lower()
+    var_type = var_type_select.value
+    var_name = var_name_select.value if var_name_select.visible else "temp"
+    percent = var_percent_input.value
+    
+    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+    outreach_dir = os.path.join(ROOT_DIR, "outreach", planet)
+    main_dir = os.path.join(outreach_dir, f"{planet}_main")
+    runname = planet
+    
+    factor_plus = 1.0 + (percent / 100.0)
+    factor_minus = 1.0 - (percent / 100.0)
+    
+    safe_name = var_name.replace(' ', '_').lower()
+    dir_plus = os.path.join(outreach_dir, f"{planet}_{var_type.lower()}_{safe_name}_{factor_plus}")
+    dir_minus = os.path.join(outreach_dir, f"{planet}_{var_type.lower()}_{safe_name}_{factor_minus}")
+    
+    import shutil
+    import data_write
+    import data_read
+    
+    if os.path.exists(dir_plus):
+        shutil.rmtree(dir_plus)
+    shutil.copytree(main_dir, dir_plus, dirs_exist_ok=True)
+    
+    if os.path.exists(dir_minus):
+        shutil.rmtree(dir_minus)
+    shutil.copytree(main_dir, dir_minus, dirs_exist_ok=True)
+    
+    if var_type == "Temperature":
+        ivar1 = 0
+    elif var_type == "Gases":
+        base_var_name = var_name.split('_')[0]
+        ivar1 = data_read.GAS_NAME_TO_ID.get(base_var_name, 1)
+    elif var_type == "Aerosols":
+        try:
+            mode_num = int(var_name.split()[1])
+            ivar1 = -mode_num
+        except:
+            ivar1 = -1
+            
+    ivar2 = 0
+    ivar3 = 3
+    varident = (ivar1, ivar2, ivar3)
+    
+    apr_plus = os.path.join(dir_plus, f"{runname}.apr")
+    data_write.write_apr_file(apr_plus, [{'VARIDENT': varident, 'VARPARAM': (factor_plus, 1e-10)}])
+    
+    apr_minus = os.path.join(dir_minus, f"{runname}.apr")
+    data_write.write_apr_file(apr_minus, [{'VARIDENT': varident, 'VARPARAM': (factor_minus, 1e-10)}])
+    
+    cmd = f'docker run --rm -i -v "$(pwd)":/data -w /data patrickirwinoxford/docker_nemesis Nemesis < {runname}.nam > test.prc'
+    
+    print(f"--- Running NEMESIS variability simulations in parallel ---")
+    print(f"Running NEMESIS in: {dir_plus}")
+    print(f"Running NEMESIS in: {dir_minus}")
+    p_plus = subprocess.Popen(cmd, shell=True, executable='/bin/zsh', cwd=dir_plus)
+    p_minus = subprocess.Popen(cmd, shell=True, executable='/bin/zsh', cwd=dir_minus)
+    
+    p_plus.wait()
+    p_minus.wait()
+    
+    if p_plus.returncode != 0 or p_minus.returncode != 0:
+        return pn.pane.Markdown("**Error running Nemesis simulation** for variability.", styles={'color': 'red'})
+        
+    print(f"--- NEMESIS simulations completed in both directories ---")
+    
+    try:
+        main_mre_path = os.path.join(main_dir, f"{runname}.mre")
+        plus_mre_path = os.path.join(dir_plus, f"{runname}.mre")
+        minus_mre_path = os.path.join(dir_minus, f"{runname}.mre")
+        
+        main_data = data_read.read_mre_file(main_mre_path)
+        plus_data = data_read.read_mre_file(plus_mre_path)
+        minus_data = data_read.read_mre_file(minus_mre_path)
+        
+        NGEOM = main_data['NGEOM']
+        spx_filepath = os.path.join(main_dir, f"{runname}.spx")
+        if os.path.exists(spx_filepath):
+            spx_data = data_read.read_spx_file(spx_filepath)
+        else:
+            spx_data = None
+            
+        inp_filepath = os.path.join(main_dir, f"{runname}.inp")
+        if os.path.exists(inp_filepath):
+            inp_data = data_read.read_inp_file(inp_filepath)
+            ispace = inp_data.get('ISPACE', 0)
+            iform = inp_data.get('IFORM', 0)
+            x_label = 'Wavelength (μm)' if ispace == 1 else 'Wavenumber (cm⁻¹)'
+            if iform == 0:
+                y_label = 'Radiance (μW cm⁻² sr⁻¹ μm⁻¹)' if ispace == 1 else 'Radiance (nW cm⁻² sr⁻¹ (cm⁻¹)⁻¹)'
+            elif iform == 1:
+                y_label = 'Fplan/Fstar (dimensionless)'
+            elif iform == 2:
+                y_label = '100*Aplan/Astar (dimensionless)'
+            elif iform == 3:
+                y_label = 'Flux (W μm⁻¹)' if ispace == 1 else 'Flux (W (cm⁻¹)⁻¹)'
+            elif iform == 4:
+                y_label = 'Flux Density (W cm⁻² μm⁻¹)' if ispace == 1 else 'Flux Density (W cm⁻² (cm⁻¹)⁻¹)'
+            else:
+                y_label = 'Radiance'
+        else:
+            x_label = 'WAVENUMBER'
+            y_label = 'SIMULATED_RADIANCE'
+            
+        import pandas as pd
+        import holoviews as hv
+        
+        plots_list = []
+        for g in range(NGEOM):
+            if spx_data and g < len(spx_data):
+                vconv = spx_data[g]['vconv']
+            else:
+                vconv = main_data['specs'][g, :, 1]
+                
+            radiance_main = main_data['specs'][g, :, 5][:len(vconv)]
+            radiance_plus = plus_data['specs'][g, :, 5][:len(vconv)]
+            radiance_minus = minus_data['specs'][g, :, 5][:len(vconv)]
+            
+            import numpy as np
+            df = pd.DataFrame({
+                x_label: vconv,
+                'Original': radiance_main,
+                'Min_Var': np.minimum(radiance_plus, radiance_minus),
+                'Max_Var': np.maximum(radiance_plus, radiance_minus)
+            })
+            
+            label_suffix = f' (Geom {g+1})' if NGEOM > 1 else ''
+            p_area = hv.Area(df, kdims=[x_label], vdims=['Min_Var', 'Max_Var'], label=f'±{percent}% Variability{label_suffix}').opts(alpha=0.3, color='red', line_alpha=0)
+            p_line = df.hvplot.line(x=x_label, y='Original', label=f'Original{label_suffix}', color='black')
+            
+            plots_list.append(p_area * p_line)
+            
+        if len(plots_list) > 1:
+            plot = hv.Overlay(plots_list)
+        else:
+            plot = plots_list[0]
+            
+        return plot.opts(
+            title=f'Variability of {var_type} ({var_name})',
+            width=1200, height=500,
+            show_grid=True,
+            xlabel=x_label,
+            ylabel=y_label
+        )
+        
+    except Exception as e:
+        return pn.pane.Markdown(f"**Error generating variability plot:** {str(e)}", styles={'color': 'red'})
+
+variability_plot_pane = pn.panel(pn.bind(calculate_variability, var_calc_button.param.clicks))
 
 outreach_layout = pn.Column(
     outreach_markdown,
@@ -111,6 +307,10 @@ outreach_layout = pn.Column(
            pn.pane.Markdown("**Rerun:**", margin=(0, 5, 0, 10)), rerun_switch, 
            radiance_button),
     radiance_plot_pane,
+    pn.layout.Divider(),
+    pn.Row(pn.pane.Markdown("**Variability:**", margin=(0, 0, 0, 0)), 
+           var_type_select, var_name_select, var_percent_input, var_calc_button),
+    variability_plot_pane,
     margin=10
 )
 
@@ -143,7 +343,7 @@ def make_beginner_model_plot(clicks):
     runname = runname_input.value
     
     if not base_path or not runname:
-        return pn.pane.Markdown("**Error:** Please select a working directory and enter a runname.", style={'color': 'red'})
+        return pn.pane.Markdown("**Error:** Please select a working directory and enter a runname.", styles={'color': 'red'})
         
     ref_path = os.path.join(base_path, f"{runname}.ref")
     aerosol_path = os.path.join(base_path, "aerosol.ref")
@@ -157,7 +357,7 @@ def make_beginner_model_plot(clicks):
         elif selected_plot == "Aerosols":
             return plots.get_aerosols_plot(aerosol_path)
     except Exception as e:
-        return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", style={'color': 'red'})
+        return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", styles={'color': 'red'})
 
 beginner_model_plot_pane = pn.panel(pn.bind(make_beginner_model_plot, beginner_model_button.param.clicks))
 
@@ -172,7 +372,7 @@ def make_beginner_radiance_plot(clicks):
     runname = runname_input.value
     
     if not base_path or not runname:
-        return pn.pane.Markdown("**Error:** Please select a working directory and enter a runname.", style={'color': 'red'})
+        return pn.pane.Markdown("**Error:** Please select a working directory and enter a runname.", styles={'color': 'red'})
         
     runname_path = os.path.join(base_path, runname)
     
@@ -185,9 +385,9 @@ def make_beginner_radiance_plot(clicks):
             
         return plots.get_spectrum_plot(runname_path)
     except subprocess.CalledProcessError as e:
-        return pn.pane.Markdown(f"**Error running Nemesis simulation:** Process exited with code {e.returncode}.", style={'color': 'red'})
+        return pn.pane.Markdown(f"**Error running Nemesis simulation:** Process exited with code {e.returncode}.", styles={'color': 'red'})
     except Exception as e:
-        return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", style={'color': 'red'})
+        return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", styles={'color': 'red'})
 
 beginner_radiance_plot_pane = pn.panel(pn.bind(make_beginner_radiance_plot, beginner_radiance_button.param.clicks))
 

@@ -1,5 +1,5 @@
  original name of this file: venus.drv                     
-      0.780   0.010000        78   0.016     :Vmin dV Npts FWHM-CORRK
+      0.780   0.001000       771   0.016     :Vmin dV Npts FWHM-CORRK
     0.000   0.000       : Additional codes PAR1 and PAR2
   venus.kls                                                                                          
    24   0     4   1             : spectral model code, FLAGH2P, NCONT, FLAGC

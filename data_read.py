@@ -27,6 +27,8 @@ RADTRAN_GAS_IDS = {
     127: 'SiO', 128: 'SiO2', 129: 'SiS', 130: 'TiH'
 }
 
+GAS_NAME_TO_ID = {v: k for k, v in RADTRAN_GAS_IDS.items()}
+
 def read_ref_file(filepath):
     with open(filepath, 'r') as f:
         lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
@@ -69,7 +71,19 @@ def read_ref_file(filepath):
     for i in range(NP):
         atm_profile[i, :] = np.fromstring(lines[start_data_idx + i], dtype=float, sep=' ')
         
-    gas_names = [RADTRAN_GAS_IDS.get(gas_id, f'Gas {gas_id}') for gas_id in gas_ids]
+    from collections import Counter
+    base_names = [RADTRAN_GAS_IDS.get(gas_id, f'Gas_{gas_id}') for gas_id in gas_ids]
+    counts = Counter(base_names)
+    
+    gas_names = []
+    seen = {}
+    for name in base_names:
+        if counts[name] > 1:
+            seen[name] = seen.get(name, 0) + 1
+            gas_names.append(f"{name}_{seen[name]}")
+        else:
+            gas_names.append(name)
+            
     columns = ['Height (km)', 'Pressure (atm)', 'Temp (K)'] + gas_names
     df = pd.DataFrame(atm_profile, columns=columns)
     return df
