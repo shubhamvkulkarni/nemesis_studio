@@ -17,7 +17,7 @@ BACKEND_URL = "http://127.0.0.1:8000"
 # --- Navigation Menu (Sidebar) ---
 nav_menu = pn.widgets.RadioButtonGroup(
     name="Panes",
-    options=["Outreach", "Beginner", "Advance"],
+    options=["Outreach", "General", "Advance"],
     value="Outreach",
     orientation="vertical",
     button_type="light",
@@ -38,7 +38,7 @@ planet_select = pn.widgets.RadioButtonGroup(
     name="Planet",
     options=["Jupiter", "Venus"],
     value="Jupiter",
-    button_type="primary",
+    button_type="success",
     button_style="outline"
 )
 
@@ -330,7 +330,7 @@ outreach_layout = pn.Column(
     margin=10
 )
 
-# --- Beginner Pane ---
+# --- General Pane ---
 working_dir_input = pn.widgets.TextInput(name="Working Directory", placeholder="Select directory...", width=400)
 select_dir_button = pn.widgets.Button(name="Browse...", width=100, align=('end', 'center'))
 runname_input = pn.widgets.TextInput(name="Runname", placeholder="e.g., venus or jupiter", width=200)
@@ -343,8 +343,8 @@ def select_working_directory(event):
 
 select_dir_button.on_click(select_working_directory)
 
-beginner_model_button = pn.widgets.Button(name="Plot", button_type="primary", width=100)
-beginner_plot_options = pn.widgets.RadioButtonGroup(
+general_model_button = pn.widgets.Button(name="Plot", button_type="primary", width=100)
+general_plot_options = pn.widgets.RadioButtonGroup(
     name="Plot Options",
     options=["Pressure and Temp", "Gases", "Aerosols"],
     value="Pressure and Temp",
@@ -352,7 +352,7 @@ beginner_plot_options = pn.widgets.RadioButtonGroup(
     button_style="outline"
 )
 
-def make_beginner_model_plot(clicks):
+def make_general_model_plot(clicks):
     if clicks == 0:
         return pn.pane.Markdown("*Click Plot to view atmospheric model*")
     
@@ -365,7 +365,7 @@ def make_beginner_model_plot(clicks):
     ref_path = os.path.join(base_path, f"{runname}.ref")
     aerosol_path = os.path.join(base_path, "aerosol.ref")
     
-    selected_plot = beginner_plot_options.value
+    selected_plot = general_plot_options.value
     try:
         if selected_plot == "Pressure and Temp":
             return plots.get_pressure_temp_plot(ref_path)
@@ -376,12 +376,12 @@ def make_beginner_model_plot(clicks):
     except Exception as e:
         return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", styles={'color': 'red'})
 
-beginner_model_plot_pane = pn.panel(pn.bind(make_beginner_model_plot, beginner_model_button.param.clicks))
+general_model_plot_pane = pn.panel(pn.bind(make_general_model_plot, general_model_button.param.clicks))
 
-beginner_radiance_button = pn.widgets.Button(name="Plot", button_type="primary", width=100)
-beginner_rerun_switch = pn.widgets.Switch(name="Rerun", value=False)
+general_radiance_button = pn.widgets.Button(name="Plot", button_type="primary", width=100)
+general_rerun_switch = pn.widgets.Switch(name="Rerun", value=False)
 
-def make_beginner_radiance_plot(clicks):
+def make_general_radiance_plot(clicks):
     if clicks == 0:
         return pn.pane.Markdown("*Click Plot to view radiative transfer simulation*")
         
@@ -394,7 +394,7 @@ def make_beginner_radiance_plot(clicks):
     runname_path = os.path.join(base_path, runname)
     
     try:
-        if beginner_rerun_switch.value:
+        if general_rerun_switch.value:
             print(f"--- Running NEMESIS simulation for {runname} ---")
             cmd = f'docker run --rm -i -v "$(pwd)":/data -w /data patrickirwinoxford/docker_nemesis Nemesis < {runname}.nam > test.prc'
             subprocess.run(cmd, shell=True, executable='/bin/zsh', cwd=base_path, check=True)
@@ -406,41 +406,41 @@ def make_beginner_radiance_plot(clicks):
     except Exception as e:
         return pn.pane.Markdown(f"**Error generating plot:** {str(e)}", styles={'color': 'red'})
 
-beginner_radiance_plot_pane = pn.panel(pn.bind(make_beginner_radiance_plot, beginner_radiance_button.param.clicks))
+general_radiance_plot_pane = pn.panel(pn.bind(make_general_radiance_plot, general_radiance_button.param.clicks))
 
-beginner_input_tab = pn.Column(
+general_input_tab = pn.Column(
     pn.pane.Markdown("*Input options are under construction.*")
 )
 
-beginner_output_tab = pn.Column(
-    pn.Row(pn.pane.Markdown("**Atmospheric model:**", margin=(0, 0, 0, 0)), beginner_plot_options, beginner_model_button),
-    beginner_model_plot_pane,
+general_output_tab = pn.Column(
+    pn.Row(pn.pane.Markdown("**Atmospheric model:**", margin=(0, 0, 0, 0)), general_plot_options, general_model_button),
+    general_model_plot_pane,
     pn.layout.Divider(),
     pn.Row(pn.pane.Markdown("**Radiative transfer simulation:**", margin=(0, 0, 0, 0)), 
-           pn.pane.Markdown("**Rerun:**", margin=(0, 5, 0, 10)), beginner_rerun_switch, 
-           beginner_radiance_button),
-    beginner_radiance_plot_pane,
+           pn.pane.Markdown("**Rerun:**", margin=(0, 5, 0, 10)), general_rerun_switch, 
+           general_radiance_button),
+    general_radiance_plot_pane,
     margin=10
 )
 
-beginner_tabs = pn.Tabs(
-    ("Input", beginner_input_tab),
-    ("Output", beginner_output_tab)
+general_tabs = pn.Tabs(
+    ("Input", general_input_tab),
+    ("Output", general_output_tab)
 )
 
-beginner_layout = pn.Column(
+general_layout = pn.Column(
     pn.pane.Markdown(
         """
-        ## Beginner Workspace
+        ## General Workspace
         
-        *This is the Beginner pane/page.*
+        *This is the General pane/page.*
         
         This workspace will guide you through running standard simulations step-by-step.
         """
     ),
     pn.Row(working_dir_input, select_dir_button, runname_input),
     pn.layout.Divider(),
-    beginner_tabs,
+    general_tabs,
     margin=10
 )
 
@@ -463,8 +463,8 @@ advance_layout = pn.Column(
 def render_active_pane(active_pane):
     if active_pane == "Outreach":
         return outreach_layout
-    elif active_pane == "Beginner":
-        return beginner_layout
+    elif active_pane == "General":
+        return general_layout
     elif active_pane == "Advance":
         return advance_layout
     return outreach_layout
@@ -482,7 +482,7 @@ template = pn.template.FastListTemplate(
     ],
     accent_base_color="#2c3e50",
     header_background="#1a252f",
-    sidebar_width=150
+    sidebar_width=110
 )
 
 # Serve the application layout
