@@ -105,6 +105,7 @@ var_type_select = pn.widgets.Select(name="Variability", options=["Temperature", 
 var_name_select = pn.widgets.Select(name="Parameter Name", options=[])
 var_name_select.visible = False
 var_percent_input = pn.widgets.FloatInput(name="% Variation", value=10.0, step=1.0)
+var_rerun_switch = pn.widgets.Switch(name="Rerun", value=True)
 var_calc_button = pn.widgets.Button(name="Calculate", button_type="primary", width=100)
 
 @pn.depends(var_type_select.param.value, planet_select.param.value, watch=True)
@@ -166,13 +167,15 @@ def calculate_variability(clicks):
     import data_write
     import data_read
     
-    if os.path.exists(dir_plus):
-        shutil.rmtree(dir_plus)
-    shutil.copytree(main_dir, dir_plus, dirs_exist_ok=True)
+    rerun = var_rerun_switch.value
     
-    if os.path.exists(dir_minus):
-        shutil.rmtree(dir_minus)
-    shutil.copytree(main_dir, dir_minus, dirs_exist_ok=True)
+    apr_plus = os.path.join(dir_plus, f"{runname}.apr")
+    apr_minus = os.path.join(dir_minus, f"{runname}.apr")
+    mre_plus_path = os.path.join(dir_plus, f"{runname}.mre")
+    mre_minus_path = os.path.join(dir_minus, f"{runname}.mre")
+    
+    run_plus = rerun or not os.path.exists(mre_plus_path)
+    run_minus = rerun or not os.path.exists(mre_minus_path)
     
     if var_type == "Temperature":
         ivar1 = 0
@@ -190,27 +193,38 @@ def calculate_variability(clicks):
     ivar3 = 3
     varident = (ivar1, ivar2, ivar3)
     
-    apr_plus = os.path.join(dir_plus, f"{runname}.apr")
-    data_write.write_apr_file(apr_plus, [{'VARIDENT': varident, 'VARPARAM': (factor_plus, 1e-10)}])
-    
-    apr_minus = os.path.join(dir_minus, f"{runname}.apr")
-    data_write.write_apr_file(apr_minus, [{'VARIDENT': varident, 'VARPARAM': (factor_minus, 1e-10)}])
-    
     cmd = f'docker run --rm -i -v "$(pwd)":/data -w /data patrickirwinoxford/docker_nemesis Nemesis < {runname}.nam > test.prc'
+    processes = []
     
-    print(f"--- Running NEMESIS variability simulations in parallel ---")
-    print(f"Running NEMESIS in: {dir_plus}")
-    print(f"Running NEMESIS in: {dir_minus}")
-    p_plus = subprocess.Popen(cmd, shell=True, executable='/bin/zsh', cwd=dir_plus)
-    p_minus = subprocess.Popen(cmd, shell=True, executable='/bin/zsh', cwd=dir_minus)
-    
-    p_plus.wait()
-    p_minus.wait()
-    
-    if p_plus.returncode != 0 or p_minus.returncode != 0:
-        return pn.pane.Markdown("**Error running Nemesis simulation** for variability.", styles={'color': 'red'})
+    if run_plus:
+        if os.path.exists(dir_plus):
+            shutil.rmtree(dir_plus)
+        shutil.copytree(main_dir, dir_plus, dirs_exist_ok=True)
+        data_write.write_apr_file(apr_plus, [{'VARIDENT': varident, 'VARPARAM': (factor_plus, 1e-10)}])
+        print(f"Running NEMESIS in: {dir_plus}")
+        p_plus = subprocess.Popen(cmd, shell=True, executable='/bin/zsh', cwd=dir_plus)
+        processes.append(p_plus)
         
-    print(f"--- NEMESIS simulations completed in both directories ---")
+    if run_minus:
+        if os.path.exists(dir_minus):
+            shutil.rmtree(dir_minus)
+        shutil.copytree(main_dir, dir_minus, dirs_exist_ok=True)
+        data_write.write_apr_file(apr_minus, [{'VARIDENT': varident, 'VARPARAM': (factor_minus, 1e-10)}])
+        print(f"Running NEMESIS in: {dir_minus}")
+        p_minus = subprocess.Popen(cmd, shell=True, executable='/bin/zsh', cwd=dir_minus)
+        processes.append(p_minus)
+        
+    if processes:
+        print(f"--- Running NEMESIS variability simulations in parallel ---")
+        for p in processes:
+            p.wait()
+            
+        if any(p.returncode != 0 for p in processes):
+            return pn.pane.Markdown("**Error running Nemesis simulation** for variability.", styles={'color': 'red'})
+        print(f"--- NEMESIS simulations completed in required directories ---")
+    else:
+        print(f"--- Using existing NEMESIS simulations for variability ---")
+    
     
     try:
         main_mre_path = os.path.join(main_dir, f"{runname}.mre")
@@ -304,12 +318,12 @@ outreach_layout = pn.Column(
     model_plot_pane,
     pn.layout.Divider(),
     pn.Row(pn.pane.Markdown("**Radiative transfer simulation:**", margin=(0, 0, 0, 0)), 
-           pn.pane.Markdown("**Rerun:**", margin=(0, 5, 0, 10)), rerun_switch, 
-           radiance_button),
+            rerun_switch, radiance_button),
     radiance_plot_pane,
     pn.layout.Divider(),
     pn.Row(pn.pane.Markdown("**Variability:**", margin=(0, 0, 0, 0)), 
-           var_type_select, var_name_select, var_percent_input, var_calc_button),
+           var_type_select, var_name_select, var_percent_input, var_rerun_switch, 
+           var_calc_button),
     variability_plot_pane,
     margin=10
 )
