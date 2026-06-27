@@ -2,32 +2,75 @@ import os
 import numpy as np
 import pandas as pd
 
+RADTRAN_GAS_IDS = {
+    1: 'H2O', 2: 'CO2', 3: 'O3', 4: 'N2O', 5: 'CO', 6: 'CH4', 7: 'O2',
+    8: 'NO', 9: 'SO2', 10: 'NO2', 11: 'NH3', 12: 'HNO3', 13: 'OH',
+    14: 'HF', 15: 'HCL', 16: 'HBr', 17: 'HI', 18: 'ClO', 19: 'OCS',
+    20: 'H2CO', 21: 'HOCl', 22: 'N2', 23: 'HCN', 24: 'CH3Cl', 25: 'H2O2',
+    26: 'C2H2', 27: 'C2H6', 28: 'PH3', 29: 'C2N2', 30: 'C4H2', 31: 'HC3N',
+    32: 'C2H4', 33: 'GeH4', 34: 'C3H8', 35: 'HCOOH', 36: 'H2S', 37: 'COF2',
+    38: 'SF6', 39: 'H2', 40: 'He', 41: 'AsH3', 42: 'C3H4', 43: 'ClONO2',
+    44: 'HO2', 45: 'O', 46: 'NO+', 47: 'CH3OH', 48: 'H', 49: 'C6H6',
+    50: 'CH3CN', 51: 'CH2NH', 52: 'C2H3CN', 53: 'HCP', 54: 'CS', 55: 'HC5N',
+    56: 'HC7N', 57: 'C2H5CN', 58: 'CH3NH2', 59: 'HNC', 60: 'Na', 61: 'K',
+    62: 'TiO', 63: 'VO', 64: 'CH2CCH2', 65: 'C4N2', 66: 'C5H5N', 67: 'C5H4N2',
+    68: 'C7H8', 69: 'C8H6', 70: 'C5H5CN', 71: 'HOBr', 72: 'CH3Br', 73: 'CF4',
+    74: 'SO3', 75: 'Ne', 76: 'Ar', 77: 'COCl2', 78: 'SO', 79: 'H2SO4',
+    80: 'e-', 81: 'H3+', 82: 'FeH', 83: 'AlO', 84: 'AlCl', 85: 'AlF',
+    86: 'AlH', 87: 'BeH', 88: 'C2', 89: 'CaF', 90: 'CaH', 91: 'H-',
+    92: 'CaO', 93: 'CH', 94: 'CH3', 95: 'CH3F', 96: 'CN', 97: 'CP',
+    98: 'CrH', 99: 'HD+', 100: 'HeH+', 101: 'KCl', 102: 'KF', 103: 'LiCl',
+    104: 'LiF', 105: 'LiH', 106: 'LiH+', 107: 'MgF', 108: 'MgH', 109: 'MgO',
+    110: 'NaCl', 111: 'NaF', 112: 'NaH', 113: 'NH', 114: 'NS', 115: 'OH+',
+    116: 'cis-P2H2', 117: 'trans-P2H2', 118: 'PH', 119: 'PN', 120: 'PO',
+    121: 'PS', 122: 'ScH', 123: 'SH', 124: 'SiH', 125: 'SiH2', 126: 'SiH4',
+    127: 'SiO', 128: 'SiO2', 129: 'SiS', 130: 'TiH'
+}
+
 def read_ref_file(filepath):
     with open(filepath, 'r') as f:
-        atm_ref = f.readlines()
+        lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
         
-    line_no = 0
-    for i in range(len(atm_ref)):
-        if not atm_ref[i].strip().startswith('#'):
-            line_no = i
-            break
-            
-    # skip AMFORM1 and AMFORM2
-    NP_line = atm_ref[2 + line_no]
-    vals = NP_line.split()
+    np_line_idx = -1
+    for idx, line in enumerate(lines):
+        vals = line.split()
+        if len(vals) in [4, 5]:
+            try:
+                float(vals[0])
+                float(vals[1])
+                if float(vals[2]).is_integer() and float(vals[3]).is_integer():
+                    np_line_idx = idx
+                    break
+            except ValueError:
+                pass
+                
+    if np_line_idx == -1:
+        raise ValueError("Could not find the parameter line (IPLANET LATITUDE NP NVMR [MOLWT])")
+        
+    vals = lines[np_line_idx].split()
     IPLANET = float(vals[0])
-    LATTITUDE = float(vals[1])
+    LATITUDE = float(vals[1])
     NP = int(float(vals[2]))
     NVMR = int(float(vals[3]))
-    MOLWT = float(vals[4])
     
-    atm_profile = np.zeros((NP, NVMR + 3))
-    for pres_level in range(NP):
-        line = atm_ref[pres_level + 4 + NVMR + line_no]
-        atm_profile[pres_level, :] = np.fromstring(line, dtype=float, sep=' ')
+    gas_ids = []
+    for i in range(NVMR):
+        id_val = int(float(lines[np_line_idx + 1 + i].split()[0]))
+        gas_ids.append(id_val)
         
-    # Create DataFrame
-    columns = ['Height (km)', 'Pressure (atm)', 'Temp (K)'] + [f'Gas {i+1}' for i in range(NVMR)]
+    header_idx = np_line_idx + 1 + NVMR
+    start_data_idx = header_idx
+    if header_idx < len(lines):
+        header_line = lines[header_idx]
+        if header_line.startswith('"') or header_line.startswith("'") or header_line[0].isalpha():
+            start_data_idx += 1
+            
+    atm_profile = np.zeros((NP, NVMR + 3))
+    for i in range(NP):
+        atm_profile[i, :] = np.fromstring(lines[start_data_idx + i], dtype=float, sep=' ')
+        
+    gas_names = [RADTRAN_GAS_IDS.get(gas_id, f'Gas {gas_id}') for gas_id in gas_ids]
+    columns = ['Height (km)', 'Pressure (atm)', 'Temp (K)'] + gas_names
     df = pd.DataFrame(atm_profile, columns=columns)
     return df
 

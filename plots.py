@@ -52,7 +52,7 @@ def get_gases_plot(ref_filepath):
         
     df = read_ref_file(ref_filepath)
     
-    gas_cols = [col for col in df.columns if col.startswith('Gas')]
+    gas_cols = [col for col in df.columns if col not in ['Height (km)', 'Pressure (atm)', 'Temp (K)']]
     
     df_melted = df.melt(id_vars=['Height (km)'], value_vars=gas_cols, var_name='Gas', value_name='VMR')
     
